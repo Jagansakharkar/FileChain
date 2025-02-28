@@ -28,10 +28,10 @@ export const Header = () => {
         {/* Login Button */}
         <div className="hidden lg:flex">
           <Link 
-            to="/login" 
+            to="/account" 
             className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-md text-white transition duration-300"
           >
-            Login
+           Account
           </Link>
         </div>
       </nav>

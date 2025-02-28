@@ -12,8 +12,12 @@
   "dependencies": {
     "@tailwindcss/vite": "^4.0.9",
     "axios": "^1.8.1",
+    "buffer": "^6.0.3",
     "dotenv": "^16.4.7",
     "ethers": "^6.13.5",
+    "global": "^4.4.0",
+    "kubo-rpc-client": "^5.1.0",
+    "process": "^0.11.10",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-icons": "^5.5.0",

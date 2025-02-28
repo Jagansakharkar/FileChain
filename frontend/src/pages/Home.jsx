@@ -3,11 +3,6 @@ import { Web3Context } from '../contexts/web3context';
 import { Link } from 'react-router-dom';
 
 export const Home = () => {
-  const { provider, account, contract } = useContext(Web3Context);
-
-  if (!provider || !account || !contract) {
-    return <div className="text-center text-gray-100 min-h-screen flex items-center justify-center">Loading...</div>;
-  }
 
   return (
     <section className="bg-gray-900 text-gray-100 min-h-screen flex items-center justify-center">

@@ -1,114 +1,157 @@
-import React, { useContext, useState } from 'react';
-import { Web3Context } from '../contexts/web3context';
-import { ethers } from 'ethers';
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import React, { useState, useContext } from "react";
+import { Web3Context } from "../contexts/web3context";
+import { toast } from "react-toastify";
+import { useNavigate } from "react-router-dom";
+
 
 export const UploadFile = () => {
-  const { account, provider, contract } = useContext(Web3Context);
+  const navigator = useNavigate()
+  const { contract, account } = useContext(Web3Context);
   const [file, setFile] = useState(null);
-  const [fileName, setFilename] = useState("No File Selected");
   const [uploading, setUploading] = useState(false);
 
-  const retrieveFile = (e) => {
-    const data = e.target.files[0];
-    if (!data) return;
+  // Upload file to Pinata
+  const uploadToPinata = async (file) => {
+    const formData = new FormData();
+    formData.append("file", file);
 
-    setFile(data);
-    setFilename(data.name);
+    try {
+      const response = await fetch("https://api.pinata.cloud/pinning/pinFileToIPFS", {
+        method: "POST",
+        headers: {
+          pinata_api_key: import.meta.env.VITE_PINATA_API_KEY,
+          pinata_secret_api_key: import.meta.env.VITE_PINATA_API_SECRET,
+        },
+        body: formData,
+      });
+
+      const result = await response.json();
+      return `https://gateway.pinata.cloud/ipfs/${result.IpfsHash}`;
+    } catch (err) {
+      console.error("Pinata upload error:", err);
+    }
   };
 
-  const handleFileUpload = async (e) => {
-    e.preventDefault();
-
-    if (!contract || !provider) {
-      toast.error("⚠️ Contract is not initialized yet.", { position: "top-center" });
-      return;
+  // Handle file selection
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+    if (selectedFile) {
+      setFile(selectedFile);
     }
+  };
 
+  // Upload file to Pinata and store the URL in the smart contract
+  const uploadFile = async () => {
+
+    // check account present or not
     if (!account) {
-      toast.error("⚠️ Please connect your MetaMask wallet.", { position: "top-center" });
-      return;
+      toast.error("Please connect to MetaMask first.");
+
+      // redirect to connect 
+      navigator('/account')
+
     }
 
     if (!file) {
-      toast.warning("⚠️ No file selected!", { position: "top-center" });
+      toast.error("Please select a file to upload");
       return;
     }
 
-    setUploading(true);
-
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const metadata = JSON.stringify({ name: file.name });
-      formData.append("pinataMetadata", metadata);
-
-      const options = JSON.stringify({ cidVersion: 1 });
-      formData.append("pinataOptions", options);
-
-      const resFile = await fetch("https://api.pinata.cloud/pinning/pinFileToIPFS", {
-        method: "POST",
-        headers: {
-          "pinata_api_key": import.meta.env.VITE_PINATA_API_KEY,
-          "pinata_secret_api_key": import.meta.env.VITE_PINATA_SECRET_API_KEY
-        },
-        body: formData
-      });
-
-      const responseData = await resFile.json();
-      if (!responseData.IpfsHash) throw new Error("Failed to retrieve IPFS hash.");
-
-      const fileUrl = `ipfs://${responseData.IpfsHash}`;
-      console.log("✅ File uploaded to IPFS:", fileUrl);
-
-      const signer =await provider.getSigner();
-      const contractWithSigner = contract.connect(signer);
-      const tx = await contractWithSigner.add(fileUrl);
-      await tx.wait();
-
-      toast.success("🎉 File uploaded successfully!", { position: "top-center" });
-      setFile(null);
-      setFilename("No File Selected");
-
-    } catch (error) {
-      console.error("❌ ERROR uploading file:", error);
-      toast.error("Error uploading file: " + error.message, { position: "top-center" });
-    } finally {
-      setUploading(false);
+    if (!contract) {
+      toast.error("Smart contract is not loaded");
+      return;
     }
+
+
+    setUploading(true);
+    try {
+      // Upload file to Pinata
+      const fileUrl = await uploadToPinata(file);
+      console.log("File uploaded to Pinata:", fileUrl);
+
+      if (!fileUrl || fileUrl.length > 1000) {
+        throw new Error("Invalid file URL");
+      }
+
+      // Store the Pinata URL in the smart contract
+      const tx = await contract.add(fileUrl, { gasLimit: 500000 });
+
+      // Wait for the transaction to be mined
+      const receipt = await tx.wait();
+      console.log("Transaction Receipt:", receipt);
+
+      if (receipt.status === 0) {
+        console.error("Transaction reverted");
+      } else {
+        console.log("Transaction succeeded");
+      }
+
+      toast.success(`File "${file.name}" uploaded successfully`);
+      setFile(null); // Reset file input
+    } catch (error) {
+      console.error("Upload failed", error);
+      if (error.data) {
+        console.error("Revert reason:", error.data.message);
+      }
+      toast.error("Upload failed: " + error.message);
+    }
+    setUploading(false);
   };
 
   return (
-    <>
-      <ToastContainer />
-      <div className="h-screen flex flex-col items-center justify-center bg-gray-900 text-gray-100 px-4">
-        <form onSubmit={handleFileUpload} className="w-full max-w-lg">
-          <div className="flex items-center justify-center w-full">
-            <label
-              htmlFor="dropzone-file"
-              className="flex flex-col items-center justify-center w-full h-64 border-2 border-gray-600 border-dashed rounded-lg cursor-pointer bg-gray-800 hover:bg-gray-700 transition-all"
+    <div className="bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center justify-center sm:w-full px-4">
+      {/* File Upload UI */}
+      <div className="flex items-center justify-center w-full border-2 border-dashed rounded-lg cursor-pointer bg-gray-400 dark:bg-gray-700 transition border-gray-300">
+        <label htmlFor="dropzone-file" className="flex flex-col items-center justify-center w-full h-64">
+          <div className="flex flex-col items-center justify-center pt-5 pb-6">
+            <svg
+              className="w-8 h-8 mb-4 text-gray-500 dark:text-gray-400"
+              aria-hidden="true"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 20 16"
             >
-              <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                <p className="mb-2 text-sm text-gray-400">
-                  <span className="font-semibold">Click to upload</span> or drag & drop
-                </p>
-                <p className="text-xs text-gray-400">SVG, PNG, JPG, GIF</p>
-              </div>
-              <input id="dropzone-file" type="file" className="hidden" onChange={retrieveFile} disabled={!account} />
-            </label>
+              <path
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"
+              />
+            </svg>
+            <p className="mb-2 text-sm text-gray-500 dark:text-gray-400">
+              <span className="font-semibold">Click to upload</span> or drag and drop
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              SVG, PNG, JPG, or GIF (MAX. 800x400px)
+            </p>
           </div>
-          <span className="block text-center mt-2 text-gray-400">{fileName}</span>
-          <button
-            type="submit"
-            disabled={!file || uploading}
-            className="w-full mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg transition-all disabled:opacity-50 hover:bg-blue-700"
-          >
-            {uploading ? "Uploading..." : "Upload File"}
-          </button>
-        </form>
+          <input id="dropzone-file" type="file" className="hidden" onChange={handleFileChange} />
+        </label>
       </div>
-    </>
-  );
-};
+
+      {/* File Preview & Name */}
+      {file && (
+        <div className="mt-4 p-2 bg-gray-100 dark:bg-gray-800 rounded-lg w-full max-w-md flex items-center gap-3">
+          {file.type.startsWith("image/") ? (
+            <img src={URL.createObjectURL(file)} alt="Preview" className="w-16 h-16 object-cover rounded-lg" />
+          ) : (
+            <div className="w-16 h-16 bg-gray-300 dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-400 font-bold rounded-lg">
+              {file.name.split(".").pop().toUpperCase()}
+            </div>
+          )}
+          <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{file.name}</p>
+        </div>
+      )}
+
+      {/* Upload Button */}
+      <button
+        onClick={uploadFile}
+        disabled={uploading || !file}
+        className="mt-6 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+      >
+        {uploading ? "Uploading..." : "Upload"}
+      </button>
+    </div>
+  )
+}

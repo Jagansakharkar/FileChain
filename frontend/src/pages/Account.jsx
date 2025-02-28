@@ -1,9 +1,9 @@
 import React, { useContext } from 'react';
 import { Web3Context } from '../contexts/web3context';
 import { Link } from 'react-router-dom';
-import { ethers } from 'ethers'; // ✅ Import ethers
+import { ethers } from 'ethers'; 
 
-export const Login = () => {
+export const Account = () => {
   const { account, setAccount } = useContext(Web3Context);
 
   const connectWallet = async () => {
@@ -11,7 +11,6 @@ export const Login = () => {
       alert('Please install MetaMask or another Ethereum-compatible browser extension.');
       return;
     }
-
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
